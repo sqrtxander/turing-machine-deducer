@@ -1,0 +1,9 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.10
+    hooks:
+      - id: ruff-check             # sort imports
+        name: sort imports
+        args: [--fix, --select, I]
+      - id: ruff-check             # lint
+      - id: ruff-format            # format code
