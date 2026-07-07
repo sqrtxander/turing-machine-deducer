@@ -1,51 +1,61 @@
+from functools import cached_property
 from typing import Callable, override
 
 from .code import Code, all_codes
 
 
-class Criterion:
+class CriteriaCard:
     @override
     def __init__(
-        self, card_id: int, _checks: list[Callable[[Code], bool]]
+        self, _id: str, _checks: dict[str, Callable[[Code], bool]]
     ) -> None:
-        self.card_id = card_id
-        self._checks: list[Callable[[Code], bool]] = _checks
-        self.possible_codes: list[set[int]] = [
-            {code for code in all_codes() if check(code)}
-            for check in self._checks
-        ]
-        self.complement_possible_codes: list[set[int]] = [
-            {
-                code
-                for code in all_codes()
-                if any(
-                    check(code)
-                    for i, check in enumerate(self._checks)
-                    if i != curr
-                )
-            }
-            for curr in range(len(self._checks))
+        self._id: str = _id
+        self.criteria: list[Criterion] = [
+            Criterion(self, criterion_id, check)
+            for criterion_id, check in _checks.items()
         ]
 
     @property
     def num_options(self) -> int:
-        return len(self._checks)
-
-    def is_valid_code(self, code: Code, option: int) -> bool:
-        if option < 0 or option >= self.num_options:
-            raise ValueError(
-                f"Option must be an int in the range [0, {self.num_options})"
-            )
-
-        return self._checks[option](code)
+        return len(self.criteria)
 
     @override
-    def __str__(self) -> str:
-        return f"Criteria card #{self.card_id}"
+    def __repr__(self) -> str:
+        return self._id
 
     @override
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Criterion):
+        if not isinstance(other, CriteriaCard):
             return False
 
-        return self.card_id == other.card_id
+        return self._id == other._id
+
+
+class Criterion:
+    @override
+    def __init__(
+        self,
+        _card: CriteriaCard,
+        _criterion_id: str,
+        check: Callable[[Code], bool],
+    ) -> None:
+        self._card = _card
+        self._criterion_id: str = _criterion_id
+        self.check: Callable[[Code], bool] = check
+        self.possible_codes: set[Code] = {
+            code for code in all_codes() if self.check(code)
+        }
+
+    @cached_property
+    def complement_possible_codes(self) -> set[Code]:
+        return set().union(
+            *(
+                other.possible_codes
+                for other in self._card.criteria
+                if other is not self
+            )
+        )
+
+    @override
+    def __repr__(self) -> str:
+        return self._criterion_id

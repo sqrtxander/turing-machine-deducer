@@ -64,11 +64,12 @@ class Code:
             other.circle,
         )
 
-    def __hash__(self):
+    @override
+    def __hash__(self) -> int:
         return hash((self.triangle, self.square, self.circle))
 
 
-def all_codes():
+def all_codes() -> list[Code]:
     return [
         Code(triangle, square, circle)
         for triangle in range(1, 6)
