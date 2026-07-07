@@ -1,9 +1,12 @@
 import argparse
+import sys
 
 from .criteria import criteria
+from .criterion import Criterion
+from .deducer import Deducer
 
 
-def criteria_card_arg(s: str):
+def criteria_card_arg(s: str) -> list[int]:
     try:
         lst = [int(num) for num in s.split(",")]
     except ValueError as e:
@@ -18,7 +21,7 @@ def criteria_card_arg(s: str):
     return lst
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--criteria",
@@ -29,11 +32,16 @@ def main():
 
     args = parser.parse_args()
 
-    game_criteria = [criteria[_id - 1] for _id in args.criteria]
+    game_criteria: list[Criterion] = [
+        criteria[_id - 1] for _id in args.criteria
+    ]
 
-    for criteria_card in game_criteria:
-        print(criteria_card)
+    deducer = Deducer(game_criteria)
+    deducer.deduce()
+    print("DONE")
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

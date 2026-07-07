@@ -1,7 +1,8 @@
-from typing import Callable
+from typing import Callable, Self, override
 
 
 class Code:
+    @override
     def __init__(self, triangle: int, square: int, circle: int) -> None:
         if triangle <= 0 or triangle > 5:
             raise ValueError(
@@ -40,3 +41,37 @@ class Code:
 
     def count_odd(self) -> int:
         return self.count_where(lambda d: d % 2 != 0)
+
+    @override
+    def __str__(self) -> str:
+        return f"{self.triangle}{self.square}{self.circle}"
+
+    def __lt__(self, other: Self) -> bool:
+        return (self.triangle, self.square, self.circle) < (
+            other.triangle,
+            other.square,
+            other.circle,
+        )
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Code):
+            return False
+
+        return (self.triangle, self.square, self.circle) == (
+            other.triangle,
+            other.square,
+            other.circle,
+        )
+
+    def __hash__(self):
+        return hash((self.triangle, self.square, self.circle))
+
+
+def all_codes():
+    return [
+        Code(triangle, square, circle)
+        for triangle in range(1, 6)
+        for square in range(1, 6)
+        for circle in range(1, 6)
+    ]

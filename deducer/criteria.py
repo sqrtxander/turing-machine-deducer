@@ -1,3 +1,6 @@
+from typing import Callable, cast
+
+from .code import Code
 from .criterion import Criterion
 
 _checks = [
@@ -149,4 +152,7 @@ _checks = [
     ],
 ]
 
-criteria = [Criterion(i, checks) for i, checks in enumerate(_checks, start=1)]
+criteria = [
+    Criterion(i, cast(list[Callable[[Code], bool]], checks))
+    for i, checks in enumerate(_checks, start=1)
+]
