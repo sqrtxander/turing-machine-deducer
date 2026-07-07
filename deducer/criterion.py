@@ -10,9 +10,21 @@ class Criterion:
     ) -> None:
         self.card_id = card_id
         self._checks: list[Callable[[Code], bool]] = _checks
-        self.option_codes: list[set[int]] = [
+        self.possible_codes: list[set[int]] = [
             {code for code in all_codes() if check(code)}
             for check in self._checks
+        ]
+        self.complement_possible_codes: list[set[int]] = [
+            {
+                code
+                for code in all_codes()
+                if any(
+                    check(code)
+                    for i, check in enumerate(self._checks)
+                    if i != curr
+                )
+            }
+            for curr in range(len(self._checks))
         ]
 
     @property
