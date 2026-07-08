@@ -42,8 +42,11 @@ class Code:
     def count_odd(self) -> int:
         return self.count_where(lambda d: d % 2 != 0)
 
+    def adjacent_differences(self) -> tuple[int, int]:
+        return self.square - self.triangle, self.circle - self.square
+
     @override
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f"{self.triangle}{self.square}{self.circle}"
 
     def __lt__(self, other: Self) -> bool:

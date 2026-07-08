@@ -6,16 +6,16 @@ from .criterion import CriteriaCard
 from .deducer import Deducer
 
 
-def criteria_card_arg(s: str) -> list[int]:
+def _criteria_card_arg(s: str) -> list[int]:
     try:
         lst = [int(num) for num in s.split(",")]
     except ValueError as e:
         raise ValueError("Invalid literal for criteria card ID") from e
 
-    if any(num <= 0 or num > 24 for num in lst):
+    if any(num <= 0 or num > 48 for num in lst):
         raise ValueError(
             "Invalid literal for criteria card ID. "
-            "Only support IDs in range [1, 24]"
+            "Only support IDs in range [1, 48]"
         )
 
     return lst
@@ -25,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--criteria",
-        type=criteria_card_arg,
+        type=_criteria_card_arg,
         required=True,
         help="comma-separated string of criteria card IDs for the challenge.",
     )
@@ -39,6 +39,7 @@ def main() -> int:
     deducer = Deducer(game_criteria)
     deducer.deduce()
     deducer.print_steps()
+    print(deducer.possible_codes)
 
     return 0
 

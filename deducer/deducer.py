@@ -30,9 +30,9 @@ class Deducer:
                 if testing_card is other_card:
                     continue
                 for testing_criterion in testing_card.criteria:
-                    if testing_criterion not in testing_options:
-                        continue
                     for other_criteria in other_card.criteria:
+                        if testing_criterion not in testing_options:
+                            break
                         if (
                             not testing_criterion.possible_codes.intersection(
                                 other_criteria.complement_possible_codes
@@ -47,7 +47,8 @@ class Deducer:
                             self.steps.append(f"""\
 {testing_card} option {testing_criterion} ruled out due to superfluity.
 It would make {other_card} superfluous.
-There are now {len(self.possible_codes)} possbile codes.""")
+There are now {len(self.possible_codes)} possbile codes.
+{self.possible_codes}""")
 
     def uniqueness(self):
         valid: list[tuple[list[Criterion], Code]] = []
@@ -73,6 +74,7 @@ There are now {len(self.possible_codes)} possbile codes.""")
                     self.steps.append(f"""\
 {card} option {criterion} ruled out due to uniqueness.
 No possible other criteria would give exactly 1 solution.
-There are now {len(self.possible_codes)} possbile codes.""")
+There are now {len(self.possible_codes)} possbile codes.
+{self.possible_codes}""")
 
         self.possible_codes &= set(code for _, code in valid)
