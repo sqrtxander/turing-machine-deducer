@@ -2,7 +2,7 @@ import argparse
 import sys
 
 from .criteria import criteria
-from .criterion import CriteriaCard
+from .criterion import CriteriaCard, PrunableCriteriaCard
 from .deducer import Deducer
 
 
@@ -33,7 +33,7 @@ def main() -> int:
     args = parser.parse_args()
 
     game_criteria: list[CriteriaCard] = [
-        criteria[_id - 1] for _id in args.criteria
+        PrunableCriteriaCard(criteria[_id - 1]) for _id in args.criteria
     ]
 
     deducer = Deducer(game_criteria)

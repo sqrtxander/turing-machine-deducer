@@ -59,3 +59,14 @@ class Criterion:
     @override
     def __repr__(self) -> str:
         return self._criterion_id
+
+
+class PrunableCriteriaCard(CriteriaCard):
+    @override
+    def __init__(self, source: CriteriaCard) -> None:
+        self._id: str = source._id
+        self.criteria: list[Criterion] = source.criteria
+        self.possible_criteria: list[Criterion] = source.criteria.copy()
+
+    def prune(self, criterion: Criterion) -> None:
+        self.possible_criteria.remove(criterion)
