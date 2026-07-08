@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Callable, override
+from typing import Callable, Iterable, override
 
 from .code import Code, all_codes
 
@@ -22,6 +22,10 @@ class CriteriaCard:
     @override
     def __repr__(self) -> str:
         return self._id
+
+    @override
+    def __format__(self, fmt: str) -> str:
+        return f"{repr(self):{fmt}}"
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -47,7 +51,7 @@ class Criterion:
         }
 
     @cached_property
-    def complement_possible_codes(self) -> set[Code]:
+    def other_possible_codes(self) -> set[Code]:
         return set().union(
             *(
                 other.possible_codes
@@ -70,3 +74,16 @@ class PrunableCriteriaCard(CriteriaCard):
 
     def prune(self, criterion: Criterion) -> None:
         self.possible_criteria.remove(criterion)
+
+    def format_possible_criteria(self) -> str:
+        return f"{str(self)[:3]} [ {
+            ' | '.join(str(criteria) for criteria in self.possible_criteria)
+        } ]"
+
+
+def format_criteria(criteria: Iterable[Criterion]) -> str:
+    criteria_strs = [str(criterion) for criterion in criteria]
+    s = " OR ".join(criteria_strs)
+    if len(criteria_strs) == 1:
+        return s
+    return f"({s})"

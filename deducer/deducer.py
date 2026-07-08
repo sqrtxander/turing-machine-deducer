@@ -1,9 +1,8 @@
-import functools
 import itertools
-from typing import override
+from typing import Callable, override
 
 from .code import Code, all_codes
-from .criterion import Criterion, PrunableCriteriaCard
+from .criterion import Criterion, PrunableCriteriaCard, format_criteria
 
 
 class Deducer:
@@ -16,147 +15,188 @@ class Deducer:
     def print_steps(self) -> None:
         print("\n\n".join(self.steps))
 
-    def deduce(self) -> None:
-        self.steps.append("=== Superfluity (1) ===")
-        self.superfluity()
-        self.steps.append(
-            "\n".join(
-                [
-                    " | ".join(str(crit) for crit in card.possible_criteria)
-                    for card in self.criteria_cards
-                ]
-            )
-        )
-        self.steps.append("=== Superfluity (2) ===")
-        self.superfluity_n(2)
-        self.steps.append(
-            "\n".join(
-                [
-                    " | ".join(str(crit) for crit in card.possible_criteria)
-                    for card in self.criteria_cards
-                ]
-            )
-        )
-        self.steps.append("=== Uniqueness ===")
-        self.uniqueness()
-        self.steps.append(
-            "\n".join(
-                [
-                    " | ".join(str(crit) for crit in card.possible_criteria)
-                    for card in self.criteria_cards
-                ]
-            )
-        )
-
-    def superfluity(self) -> None:
+    def _deduce_with(
+        self, f: Callable[[PrunableCriteriaCard, Criterion], bool]
+    ) -> bool:
+        deduced = False
         for testing_card in self.criteria_cards:
-            for other_card in self.criteria_cards:
-                if testing_card is other_card:
+            if len(testing_card.possible_criteria) == 1:
+                continue
+            for testing_criterion in testing_card.criteria:
+                if testing_criterion not in testing_card.possible_criteria:
                     continue
-                for testing_criterion in testing_card.criteria:
-                    if testing_criterion not in testing_card.possible_criteria:
-                        continue
-                    for other_criterion in other_card.criteria:
-                        if (
-                            not testing_criterion.possible_codes.intersection(
-                                other_criterion.complement_possible_codes
-                            )
-                        ) and testing_criterion.possible_codes.issubset(
-                            other_criterion.possible_codes
-                        ):
-                            self.possible_codes &= (
-                                testing_criterion.complement_possible_codes
-                            )
-                            testing_card.prune(testing_criterion)
-                            self.steps.append(f"""\
-If {testing_card} option {testing_criterion} were true, it would make \
-{other_card} superfluous.
-Therefore {testing_card} option {testing_criterion} is ruled out.
-There are now {len(self.possible_codes)} possible codes.""")
-                            break
+                if f(testing_card, testing_criterion):
+                    deduced = True
+                    if len(testing_card.possible_criteria) == 1:
+                        correct_criterion = testing_card.possible_criteria[0]
+                        self.possible_codes &= correct_criterion.possible_codes
+                        self.steps.append(f"""\
+{testing_card} has only one remaining criterion.
+Therefore {testing_card}__{correct_criterion} is true.""")
+        return deduced
 
-    def superfluity_n(self, n: int) -> None:
-        solved_cards = [
-            card
-            for card in self.criteria_cards
-            if len(card.possible_criteria) == 1
+    def deduce(self) -> None:
+        def superfluity(n: int):
+            return lambda a, b: self.superfluity_n(a, b, n)
+
+        self.steps.append(
+            "\n".join(
+                card.format_possible_criteria() for card in self.criteria_cards
+            )
+        )
+
+        for n in range(1, len(self.criteria_cards)):
+            self.steps.append(f"=== Superfluity ({n}) ===")
+            deduced = True
+            while deduced:
+                deduced = deduced and self._deduce_with(superfluity(n))
+
+            self.steps.append(
+                "\n".join(
+                    card.format_possible_criteria()
+                    for card in self.criteria_cards
+                )
+            )
+        self.steps.append("=== Uniqueness ===")
+        self._deduce_with(self.uniqueness)
+
+    def superfluity_n(
+        self,
+        testing_card: PrunableCriteriaCard,
+        testing_criterion: Criterion,
+        n: int,
+    ) -> bool:
+        if len(self.criteria_cards) < n - 1:
+            return False
+
+        if testing_criterion not in testing_card.possible_criteria:
+            return False
+
+        other_cards = [
+            card for card in self.criteria_cards if card is not testing_card
         ]
-        unsolved_cards = [
-            card
-            for card in self.criteria_cards
-            if len(card.possible_criteria) != 1
-        ]
-        for testing_card, known_cards in itertools.product(
-            unsolved_cards, itertools.combinations(solved_cards, n - 1)
-        ):
-            testing_cards = [testing_card, *known_cards]
-            for other_card in self.criteria_cards:
-                if any(other_card is card for card in testing_cards):
+
+        for testing_cards in itertools.combinations(other_cards, n - 1):
+            testing_possible_codes = _testing_possible_codes(
+                testing_criterion, testing_cards
+            )
+
+            for other_card in other_cards:
+                if other_card in testing_cards:
                     continue
-                for testing_criteria in itertools.product(
-                    *[card.possible_criteria for card in testing_cards]
-                ):
-                    testing_possible_codes = functools.reduce(
-                        set.intersection,
-                        (option.possible_codes for option in testing_criteria),
-                    )
-                    for other_criterion in other_card.criteria:
-                        if all(
-                            other_criterion is not criterion
-                            for criterion in other_card.criteria
-                        ):
-                            break
-                        if (
-                            not testing_possible_codes.intersection(
-                                other_criterion.complement_possible_codes
-                            )
-                        ) and testing_possible_codes.issubset(
-                            other_criterion.possible_codes
-                        ):
-                            testing_criterion = testing_criteria[0]
-                            self.possible_codes &= (
-                                testing_criterion.complement_possible_codes
-                            )
-                            testing_card.prune(testing_criterion)
-                            self.steps.append(f"""\
-If {testing_card} option {testing_criterion} were true, because of \
-{" and ".join(str(c) for c in known_cards)}, {other_card} would be superfluous.
-Therefore {testing_card} option {testing_criterion} is ruled out.
-There are now {len(self.possible_codes)} possible codes.""")
-                            break
 
-    def uniqueness(self) -> None:
-        valid: list[tuple[list[Criterion], Code]] = []
+                other_criterion = _find_superfluous_criterion(
+                    other_card, testing_possible_codes
+                )
+
+                if other_criterion is None:
+                    continue
+
+                self._apply_superfluity(
+                    testing_card,
+                    testing_criterion,
+                    other_card,
+                    other_criterion,
+                    testing_cards,
+                )
+
+                return True
+
+        return False
+
+    def _apply_superfluity(
+        self,
+        testing_card: PrunableCriteriaCard,
+        testing_criterion: Criterion,
+        other_card: PrunableCriteriaCard,
+        other_criterion: Criterion,
+        testing_cards: tuple[PrunableCriteriaCard, ...],
+    ) -> None:
+        self.possible_codes &= testing_criterion.other_possible_codes
+        testing_card.prune(testing_criterion)
+        clause = ""
+        if testing_cards:
+            conditions = [
+                format_criteria(card.possible_criteria)
+                for card in testing_cards
+            ]
+            clause = f"Since {' AND '.join(conditions)} is known true,"
+        excluding = format_criteria(
+            criterion
+            for criterion in other_card.criteria
+            if criterion is not other_criterion
+        )
+        lines = [
+            f"Considering {testing_card}__{testing_criterion} "
+            f"and {other_card}.",
+            f"    {clause}" if clause else None,
+            f"    {testing_criterion} is contained by {other_criterion},",
+            f"    {testing_criterion} is disjoint to {excluding}.",
+            f"        => {other_card} is superfluous.",
+            f"    Therefore {testing_card}__{testing_criterion} is ruled out.",
+        ]
+        self.steps.append("\n".join(line for line in lines if line is not None))
+
+    def uniqueness(
+        self, testing_card: PrunableCriteriaCard, testing_criterion: Criterion
+    ) -> bool:
+        if testing_criterion not in testing_card.possible_criteria:
+            return False
+        unique = 0
         for criterion_options in itertools.product(
-            *[card.possible_criteria for card in self.criteria_cards]
+            *[
+                [testing_criterion]
+                if card is testing_card
+                else card.possible_criteria
+                for card in self.criteria_cards
+            ]
         ):
-            possible_codes = self.possible_codes.copy()
-            for criterion in criterion_options:
-                possible_codes &= criterion.possible_codes
+            possible_codes = set.intersection(
+                self.possible_codes.copy(),
+                *[criterion.possible_codes for criterion in criterion_options],
+            )
 
             if len(possible_codes) == 1:
-                valid.append((list(criterion_options), possible_codes.pop()))
+                if unique == 1:
+                    return False
+                unique += 1
 
-        for v, c in valid:
-            self.steps.append(f"""\
-{c}
-{"\n".join(str(crit) for crit in v)}""")
+        if unique == 1:
+            return False
 
-        for i, criterion_options in enumerate(
-            card.possible_criteria for card in self.criteria_cards
-        ):
-            for criterion in criterion_options:
-                if all(
-                    criterion not in possible_criteria
-                    for possible_criteria, _ in valid
-                ):
-                    card = self.criteria_cards[i]
-                    self.possible_codes &= criterion.complement_possible_codes
-                    criterion_options.remove(criterion)
-                    self.steps.append(f"""\
-{card} option {criterion} ruled out due to uniqueness.
-No possible other criteria would give exactly 1 solution.
-There are now {len(self.possible_codes)} possbile codes.
-{self.possible_codes}""")
+        self.possible_codes &= testing_criterion.other_possible_codes
+        testing_card.prune(testing_criterion)
+        self.steps.append(f"""\
+{testing_card}__{testing_criterion} true
+    => Solution is any of ...
+""")
+        return True
 
-        self.possible_codes &= set(code for _, code in valid)
+
+def _testing_possible_codes(
+    testing_criterion: Criterion,
+    testing_cards: tuple[PrunableCriteriaCard, ...],
+) -> set[Code]:
+    card_possible_codes = [
+        set.union(
+            *(criteria.possible_codes for criteria in card.possible_criteria)
+        )
+        for card in testing_cards
+    ]
+    return testing_criterion.possible_codes.intersection(*card_possible_codes)
+
+
+def _find_superfluous_criterion(
+    other_card: PrunableCriteriaCard,
+    testing_possible_codes: set[Code],
+) -> Criterion | None:
+    for other_criterion in other_card.criteria:
+        contained = testing_possible_codes.issubset(
+            other_criterion.possible_codes
+        )
+        disjoint = not testing_possible_codes.intersection(
+            other_criterion.other_possible_codes
+        )
+        if disjoint and contained:
+            return other_criterion
+    return None
