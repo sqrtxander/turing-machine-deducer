@@ -71,9 +71,19 @@ class PrunableCriteriaCard(CriteriaCard):
         self._id: str = source._id
         self.criteria: list[Criterion] = source.criteria
         self.possible_criteria: list[Criterion] = source.criteria.copy()
+        self.assumed_possible_criteria: list[Criterion] = source.criteria.copy()
 
     def prune(self, criterion: Criterion) -> None:
-        self.possible_criteria.remove(criterion)
+        self.assumed_possible_criteria.remove(criterion)
+
+    def assume(self, criterion: Criterion) -> None:
+        self.assumed_possible_criteria = [criterion]
+
+    def unassume(self) -> None:
+        self.assumed_possible_criteria = self.possible_criteria.copy()
+
+    def apply_assumption(self) -> None:
+        self.possible_criteria = self.assumed_possible_criteria.copy()
 
     def format_possible_criteria(self) -> str:
         return f"{str(self)[:3]} [ {

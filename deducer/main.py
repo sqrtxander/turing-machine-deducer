@@ -39,7 +39,6 @@ def main() -> int:
     deducer = Deducer(game_criteria)
     deducer.deduce()
     deducer.print_steps()
-    print(deducer.possible_codes)
 
     return 0
 
