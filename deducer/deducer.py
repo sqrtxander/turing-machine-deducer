@@ -55,6 +55,12 @@ class Deducer:
     def print_steps(self) -> None:
         print(self.deduction_log)
 
+    def _log_criteria_options(self) -> None:
+        self.deduction_log.add(
+            [card.format_possible_criteria() for card in self.criteria_cards]
+        )
+        self.deduction_log.write()
+
     def is_solved(self) -> bool:
         return all(
             len(card.possible_criteria) == 1 for card in self.criteria_cards
@@ -79,6 +85,7 @@ class Deducer:
             card.apply_assumption()
 
     def next_assumption(self) -> bool:
+        result = True
         for _ in range(2):
             for card, criterion in self._assumption_gen:
                 if len(card.assumed_possible_criteria) == 1:
@@ -88,9 +95,10 @@ class Deducer:
                 self._assumed_card, self._assumed_criterion = card, criterion
                 self._assumed_card.assume(self._assumed_criterion)
                 self.possible_codes &= self._assumed_criterion.possible_codes
-                return True
+                return result
             self._assumption_gen = self._make_assumption_gen()
-        return False
+            result = False
+        return result
 
     def _deduce_with(
         self, f: Callable[[PrunableCriteriaCard, Criterion], bool]
@@ -146,22 +154,19 @@ class Deducer:
         return self._assumed_card is None or contra
 
     def deduce(self) -> None:
-
-        self.deduction_log.add(
-            [card.format_possible_criteria() for card in self.criteria_cards]
-        )
-        self.deduction_log.write()
+        self._log_criteria_options()
 
         self._deduce_aux()
         self.deduction_log.write()
 
-        self.deduction_log.add(
-            [card.format_possible_criteria() for card in self.criteria_cards]
-        )
-        self.deduction_log.write()
+        self._log_criteria_options()
+
+        made_progress = False
         while not self.is_solved():
-            self.deduction_log.write()
-            self.next_assumption()
+            if not self.next_assumption():
+                if not made_progress:
+                    break
+                made_progress = False
             if self._assumed_card is None or self._assumed_criterion is None:
                 break
             with self.deduction_log.assuming(
@@ -169,20 +174,16 @@ class Deducer:
             ):
                 contra = self._deduce_aux()
             if contra:
+                made_progress = True
                 self.deduction_log.write()
                 self._if_one_remaining_criterion(self._assumed_card)
                 self.deduction_log.write()
-                self.deduction_log.add(
-                    [
-                        card.format_possible_criteria()
-                        for card in self.criteria_cards
-                    ]
-                )
-                self.deduction_log.write()
+                self._log_criteria_options()
             else:
                 self.deduction_log.wipe()
+
         if not self.is_solved():
-            self.deduction_log.add(["ahh crap"])
+            self.deduction_log.add(["I could not deduce all criteria cards."])
         else:
             self.deduction_log.add(
                 [
@@ -190,7 +191,7 @@ class Deducer:
                     f"The code is {self.possible_codes.pop()}.",
                 ]
             )
-            self.deduction_log.write()
+        self.deduction_log.write()
 
     def superfluity_n(
         self,
