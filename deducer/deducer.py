@@ -347,7 +347,7 @@ class Deducer:
             )
             codes_s = ", ".join(str(code) for code in sorted(list(codes)))
             if criteria_s:
-                return f"{criteria_s} gives possible codes {codes_s},"
+                return f"{criteria_s} gives possible codes {{{codes_s}}},"
             else:
                 return f"Possible codes {codes_s},"
 
