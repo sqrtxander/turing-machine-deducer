@@ -93,7 +93,8 @@ class Deducer:
                     continue
                 if criterion not in card.assumed_possible_criteria:
                     continue
-                self._assumed_card, self._assumed_criterion = card, criterion
+                self._assumed_card = card
+                self._assumed_criterion = criterion
                 self._assumed_card.assume(self._assumed_criterion)
                 self.possible_codes &= self._assumed_criterion.possible_codes
                 return result
@@ -334,7 +335,7 @@ class Deducer:
         all_codes: dict[tuple[Criterion, ...], set[Code]],
     ) -> None:
         option_mask = [
-            len(card.assumed_possible_criteria) > 1
+            len(card.assumed_possible_criteria) > 1 and card is not testing_card
             for card in self.criteria_cards
         ]
 
@@ -349,7 +350,7 @@ class Deducer:
             if criteria_s:
                 return f"{criteria_s} gives possible codes {{{codes_s}}},"
             else:
-                return f"Possible codes {codes_s},"
+                return f"Possible codes {{{codes_s}}},"
 
         self.possible_codes &= testing_criterion.other_possible_codes
         testing_card.prune(testing_criterion)
