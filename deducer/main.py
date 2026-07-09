@@ -4,6 +4,7 @@ import sys
 from .criteria import criteria
 from .criterion import PrunableCriteriaCard
 from .deducer import Deducer
+from .errors import UnsolvableError
 
 
 def _criteria_card_arg(s: str) -> list[int]:
@@ -29,6 +30,12 @@ def main() -> int:
         required=True,
         help="comma-separated string of criteria card IDs for the challenge.",
     )
+    parser.add_argument(
+        "--output-on-fail",
+        action="store_true",
+        required=False,
+        help="only output the criteria ids when failing, else output nothing",
+    )
 
     args = parser.parse_args()
 
@@ -37,10 +44,19 @@ def main() -> int:
     ]
 
     deducer = Deducer(game_criteria)
-    deducer.deduce()
-    deducer.print_steps()
+    error = False
+    try:
+        solved = deducer.deduce()
+    except UnsolvableError:
+        error = True
 
-    return 0
+    if not args.output_on_fail:
+        deducer.print_steps()
+
+    if (error or not solved) and args.output_on_fail:
+        print(", ".join([str(_id) for _id in args.criteria]))
+
+    return int(error)
 
 
 if __name__ == "__main__":

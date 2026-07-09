@@ -5,6 +5,7 @@ from typing import Callable, override
 from .code import Code, all_codes
 from .criterion import Criterion, PrunableCriteriaCard, format_criteria
 from .deduction_log import DeductionLog
+from .errors import UnsolvableError
 
 
 class Deducer:
@@ -116,7 +117,20 @@ class Deducer:
                 ):
                     continue
                 if f(testing_card, testing_criterion):
-                    if len(testing_card.assumed_possible_criteria) == 0:
+                    if not testing_card.assumed_possible_criteria:
+                        if self._assumed_card is None:
+                            self.deduction_log.add(
+                                [
+                                    f"{testing_card} has no possible criteria, "
+                                    "and we are not in an assumption.",
+                                    "Therefore the verifiers provided are "
+                                    "incompatible with one another.",
+                                    "There is no valid solution.",
+                                ]
+                            )
+
+                            return True
+
                         self.deduction_log.add(
                             [
                                 f"{testing_card} has no possible criteria.",
@@ -144,6 +158,10 @@ class Deducer:
             if contra:
                 break
 
+        if contra and self._assumed_card is None:
+            self.deduction_log.write()
+            raise UnsolvableError
+
         if not contra:
             contra = self._deduce_with(self.uniqueness)
 
@@ -153,7 +171,7 @@ class Deducer:
         self.restore_from_assumption(contra)
         return self._assumed_card is None or contra
 
-    def deduce(self) -> None:
+    def deduce(self) -> bool:
         self._log_criteria_options()
 
         self._deduce_aux()
@@ -184,14 +202,17 @@ class Deducer:
 
         if not self.is_solved():
             self.deduction_log.add(["I could not deduce all criteria cards."])
-        else:
-            self.deduction_log.add(
-                [
-                    "All criteria cards deduced.",
-                    f"The code is {self.possible_codes.pop()}.",
-                ]
-            )
+            self.deduction_log.write()
+            return False
+
+        self.deduction_log.add(
+            [
+                "All criteria cards deduced.",
+                f"The code is {self.possible_codes.pop()}.",
+            ]
+        )
         self.deduction_log.write()
+        return True
 
     def superfluity_n(
         self,
