@@ -457,6 +457,19 @@ _criteria = [
         },
     ),
     (
+        "c47_num_ones_or_num_fours",
+        {
+            "zero_ones": lambda c: c.count(1) == 0,
+            "one_one": lambda c: c.count(1) == 1,
+            "two_ones": lambda c: c.count(1) == 2,
+            "three_ones": lambda c: c.count(1) == 3,
+            "zero_fours": lambda c: c.count(4) == 0,
+            "one_four": lambda c: c.count(4) == 1,
+            "two_fours": lambda c: c.count(4) == 2,
+            "three_fours": lambda c: c.count(4) == 3,
+        },
+    ),
+    (
         "c48_digit_cmp_other",
         {
             "triangle_lt_square": lambda c: c.triangle < c.square,
