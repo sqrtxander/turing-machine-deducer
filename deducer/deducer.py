@@ -4,6 +4,7 @@ from typing import Callable, override
 
 from .code import Code, all_codes
 from .criterion import Criterion, PrunableCriteriaCard, format_criteria
+from .deduction_log import DeductionLog
 
 
 class Deducer:
@@ -11,8 +12,7 @@ class Deducer:
     def __init__(self, criteria_cards: list[PrunableCriteriaCard]) -> None:
         self.criteria_cards: list[PrunableCriteriaCard] = criteria_cards
         self.possible_codes: set[Code] = set(all_codes())
-        self.steps: list[str] = []
-        self.current_step: list[str] = []
+        self.deduction_log = DeductionLog()
         self._assumed_card: PrunableCriteriaCard | None = None
         self._assumed_criterion: Criterion | None = None
         self._assumption_gen: GeneratorType[
@@ -45,12 +45,15 @@ class Deducer:
             return
         correct_criterion = card.assumed_possible_criteria[0]
         self.possible_codes &= correct_criterion.possible_codes
-        self.current_step.append(f"""\
-{card} has only one remaining criterion.
-Therefore {card}__{correct_criterion} is true.""")
+        self.deduction_log.add(
+            [
+                f"{card} has only one remaining criterion.",
+                f"Therefore {card}__{correct_criterion} is true.",
+            ]
+        )
 
     def print_steps(self) -> None:
-        print("\n\n".join(self.steps))
+        print(self.deduction_log)
 
     def is_solved(self) -> bool:
         return all(
@@ -68,7 +71,6 @@ Therefore {card}__{correct_criterion} is true.""")
         ):
             self._assumed_card.prune(self._assumed_criterion)
             self._assumed_card.apply_assumption()
-            self._if_one_remaining_criterion(self._assumed_card)
 
         self.possible_codes = self._recalculate_possible_codes()
 
@@ -86,9 +88,6 @@ Therefore {card}__{correct_criterion} is true.""")
                 self._assumed_card, self._assumed_criterion = card, criterion
                 self._assumed_card.assume(self._assumed_criterion)
                 self.possible_codes &= self._assumed_criterion.possible_codes
-                self.current_step.append(
-                    f"ASSUMING {self._assumed_card}__{self._assumed_criterion}"
-                )
                 return True
             self._assumption_gen = self._make_assumption_gen()
         return False
@@ -97,6 +96,11 @@ Therefore {card}__{correct_criterion} is true.""")
         self, f: Callable[[PrunableCriteriaCard, Criterion], bool]
     ) -> bool:
         for testing_card in self.criteria_cards:
+            if (
+                self._assumed_criterion is None
+                and len(testing_card.assumed_possible_criteria) == 1
+            ):
+                continue
             for testing_criterion in testing_card.criteria:
                 if (
                     testing_criterion
@@ -105,56 +109,88 @@ Therefore {card}__{correct_criterion} is true.""")
                     continue
                 if f(testing_card, testing_criterion):
                     if len(testing_card.assumed_possible_criteria) == 0:
-                        self.current_step.append(f"""\
-{testing_card} has no possible criteria.
-Therefore our assumption was wrong, and \
-{self._assumed_card}__{self._assumed_criterion} is ruled out.""")
+                        self.deduction_log.add(
+                            [
+                                f"{testing_card} has no possible criteria.",
+                                "Therefore our assumption was wrong, and "
+                                f"{self._assumed_card}__"
+                                f"{self._assumed_criterion} is ruled out.",
+                            ]
+                        )
 
                         return True
                     if self._assumed_card is None:
                         self._if_one_remaining_criterion(testing_card)
         return False
 
-    def deduce(self) -> None:
-        def superfluity(n: int):
-            return lambda a, b: self.superfluity_n(a, b, n)
+    def _superfluity(
+        self, n: int
+    ) -> Callable[[PrunableCriteriaCard, Criterion], bool]:
+        return lambda a, b: self.superfluity_n(a, b, n)
 
+    def _deduce_aux(self) -> bool:
         contra = False
 
         for n in range(1, len(self.criteria_cards)):
-            contra = self._deduce_with(superfluity(n))
+            contra = self._deduce_with(self._superfluity(n))
             if contra:
                 break
 
         if not contra:
-            contra = self.uniqueness()
-            if contra:
-                self.current_step.append("CONTRA FROM UNIQUENESS")
+            contra = self._deduce_with(self.uniqueness)
 
         if self._assumed_card is None:
             self.apply_assumption()
 
-        self.current_step.append(
-            "\n".join(
-                card.format_possible_criteria() for card in self.criteria_cards
-            )
-        )
-
         self.restore_from_assumption(contra)
+        return self._assumed_card is None or contra
 
-        if contra or self._assumed_card is None:
-            self.steps.extend(self.current_step)
+    def deduce(self) -> None:
 
-        self.current_step = []
+        self.deduction_log.add(
+            [card.format_possible_criteria() for card in self.criteria_cards]
+        )
+        self.deduction_log.write()
 
-        if not self.is_solved():
+        self._deduce_aux()
+        self.deduction_log.write()
+
+        self.deduction_log.add(
+            [card.format_possible_criteria() for card in self.criteria_cards]
+        )
+        self.deduction_log.write()
+        while not self.is_solved():
+            self.deduction_log.write()
             self.next_assumption()
-            self.deduce()
+            if self._assumed_card is None or self._assumed_criterion is None:
+                break
+            with self.deduction_log.assuming(
+                self._assumed_card, self._assumed_criterion
+            ):
+                contra = self._deduce_aux()
+            if contra:
+                self.deduction_log.write()
+                self._if_one_remaining_criterion(self._assumed_card)
+                self.deduction_log.write()
+                self.deduction_log.add(
+                    [
+                        card.format_possible_criteria()
+                        for card in self.criteria_cards
+                    ]
+                )
+                self.deduction_log.write()
+            else:
+                self.deduction_log.wipe()
+        if not self.is_solved():
+            self.deduction_log.add(["ahh crap"])
         else:
-            self.steps.append(
-                f"All criteria cards deduced. \
-The code is {self.possible_codes.pop()}"
+            self.deduction_log.add(
+                [
+                    "All criteria cards deduced.",
+                    f"The code is {self.possible_codes.pop()}.",
+                ]
             )
+            self.deduction_log.write()
 
     def superfluity_n(
         self,
@@ -217,40 +253,100 @@ The code is {self.possible_codes.pop()}"
                 for card in testing_cards
             ]
             clause = f"Since {' AND '.join(conditions)} is known true,"
-        excluding = format_criteria(
-            criterion
-            for criterion in other_card.criteria
-            if criterion is not other_criterion
-        )
-        lines = [
-            f"Considering {testing_card}__{testing_criterion} "
-            f"and {other_card}.",
-            f"    {clause}" if clause else None,
-            f"    {testing_criterion} is contained by {other_criterion},",
-            f"    {testing_criterion} is disjoint to {excluding}.",
-            f"        => {other_card} is superfluous.",
-            f"    Therefore {testing_card}__{testing_criterion} is ruled out.",
-        ]
-        self.current_step.append(
-            "\n".join(line for line in lines if line is not None)
-        )
 
-    def uniqueness(self) -> bool:
-        valid = []
-        for criterion_options in itertools.product(
-            *[card.assumed_possible_criteria for card in self.criteria_cards]
+        lines: list[str] = [
+            f"{testing_criterion} is contained by {other_criterion},"
+            if criterion is other_criterion
+            else f"{testing_criterion} is disjoint from {criterion},"
+            for criterion in other_card.criteria
+        ]
+        if lines:
+            lines[-1] = f"{lines[-1].removesuffix(',')}."
+        with self.deduction_log.checking(
+            testing_card, testing_criterion, other_card
         ):
-            possible_codes = self.possible_codes.copy().intersection(
+            self.deduction_log.add(
+                [
+                    line
+                    for line in [
+                        f"{clause}" if clause else None,
+                        *lines,
+                        f"=> {other_card} is superfluous.",
+                        f"Therefore {testing_card}__{testing_criterion} "
+                        "is ruled out.",
+                    ]
+                    if line is not None
+                ]
+            )
+
+    def uniqueness(
+        self, testing_card: PrunableCriteriaCard, testing_criterion: Criterion
+    ) -> bool:
+        all_codes = {}
+        for criterion_options in itertools.product(
+            *[
+                [testing_criterion]
+                if card is testing_card
+                else card.assumed_possible_criteria
+                for card in self.criteria_cards
+            ]
+        ):
+            possible_codes = self.possible_codes.intersection(
                 *[criterion.possible_codes for criterion in criterion_options],
             )
 
-            if len(possible_codes) == 1:
-                valid.append(criterion_options)
+            all_codes[criterion_options] = possible_codes
 
-        if len(valid) == 0:
+        if not any(
+            len(possible_codes) == 1 for possible_codes in all_codes.values()
+        ):
+            self._apply_uniqueness(testing_card, testing_criterion, all_codes)
             return True
 
         return False
+
+    def _apply_uniqueness(
+        self,
+        testing_card: PrunableCriteriaCard,
+        testing_criterion: Criterion,
+        all_codes: dict[tuple[Criterion, ...], set[Code]],
+    ) -> None:
+        option_mask = [
+            len(card.assumed_possible_criteria) > 1
+            for card in self.criteria_cards
+        ]
+
+        def _format_line(
+            criteria: tuple[Criterion, ...], codes: set[Code]
+        ) -> str:
+            filtered_criteria = itertools.compress(criteria, option_mask)
+            criteria_s = ", ".join(
+                [str(criterion) for criterion in filtered_criteria]
+            )
+            codes_s = ", ".join(str(code) for code in sorted(list(codes)))
+            if criteria_s:
+                return f"{criteria_s} gives possible codes {codes_s},"
+            else:
+                return f"Possible codes {codes_s},"
+
+        self.possible_codes &= testing_criterion.other_possible_codes
+        testing_card.prune(testing_criterion)
+
+        lines: list[str] = [
+            _format_line(criteria, codes)
+            for criteria, codes in all_codes.items()
+        ]
+        if lines:
+            lines[-1] = f"{lines[-1].removesuffix(',')}."
+        with self.deduction_log.checking(testing_card, testing_criterion):
+            self.deduction_log.add(
+                [
+                    *lines,
+                    "=> No possible unique code.",
+                    f"Therefore {testing_card}__{testing_criterion} "
+                    "is ruled out.",
+                ]
+            )
 
 
 def _testing_possible_codes(
