@@ -1,0 +1,6 @@
+#! /usr/bin/bash
+
+while IFS= read -r line; do
+    python -m deducer.main --criteria "${line}" --output-on-fail
+done < ${1}
+
